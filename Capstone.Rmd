@@ -1,0 +1,242 @@
+---
+title: "Capstone Project"
+author: "Nate"
+date: "2022-12-30"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+# Obective
+
+Cyclistic is a bike-share company located in Chicago. The director of marketing believes the company’s future success depends on maximizing the number of annual memberships for their product.
+
+The following is an analysis of how casual users of Cyclistic's product differ from their annual members.
+
+## Install required packages
+
+Begin by loading the following:
+
+* tidyverse for data import and wrangling
+* lubridate for date functions
+* Janitor for comparing multiple data frames
+* ggplot for visualization
+
+```{r libaries, message=FALSE}
+library(tidyverse)
+library(lubridate)
+library(janitor)
+library(ggplot2)
+setwd("/Users/Nate/Desktop/Google course/data")
+```
+
+## Data collection and import
+
+Data was collected from the open-source divvy-tripdata CSVs located [HERE](https://divvy-tripdata.s3.amazonaws.com/index.html)
+
+Once downloaded, begin by loading the CSVs and creating a data frame for each one:
+
+```{r csvs, message=FALSE}
+Jan_2022 <- read_csv("202201-divvy-tripdata.csv")
+Feb_2022 <- read_csv("202202-divvy-tripdata.csv")
+Mar_2022 <- read_csv("202203-divvy-tripdata.csv")
+Apr_2022 <- read_csv("202204-divvy-tripdata.csv")
+May_2022 <- read_csv("202205-divvy-tripdata.csv")
+Jun_2022 <- read_csv("202206-divvy-tripdata.csv")
+Jul_2022 <- read_csv("202207-divvy-tripdata.csv")
+Aug_2022 <- read_csv("202208-divvy-tripdata.csv")
+Sep_2022 <- read_csv("202209-divvy-tripdata.csv")
+Oct_2022 <- read_csv("202210-divvy-tripdata.csv")
+Nov_2022 <- read_csv("202211-divvy-tripdata.csv")
+```
+
+## Inspect the data and merge into a single data frame
+
+Compare column names each of the files. We need to ensure that the data in each data frame is standardized so that it can all be combined into a single data frame for convenience later.
+
+```{r compare_cols}
+compare_df_cols(Jan_2022, Feb_2022, Mar_2022, Apr_2022, May_2022, Jun_2022, Jul_2022, Aug_2022, Sep_2022, Oct_2022, Nov_2022)
+```
+
+Inspect the structure of each data frame...
+
+```{r str}
+str(Jan_2022)
+str(Feb_2022)
+str(Mar_2022)
+str(Apr_2022)
+str(May_2022)
+str(Jun_2022)
+str(Jul_2022)
+str(Aug_2022)
+str(Sep_2022)
+str(Oct_2022)
+str(Nov_2022)
+```
+
+Now that we know the data can be successfully merged without issue, proceed to merge all of the data into a single data frame for ease of use later.
+
+```{r all_trips, message=FALSE}
+all_trips <- bind_rows(Jan_2022, Feb_2022, Mar_2022, Apr_2022, May_2022, Jun_2022, Jul_2022, Aug_2022, Sep_2022, Oct_2022, Nov_2022)
+```
+
+## Clean and prepare data for analysis
+
+Inspect the new table that has been created...
+
+* Verify column names
+* Check the total row count
+* Take a look at the first 6 rows of the data
+* See a list of the columns and data types
+* Take a look at a statistical summary of the data
+
+```{r colnames}
+colnames(all_trips)
+nrow(all_trips)
+dim(all_trips)
+head(all_trips)
+str(all_trips)
+summary(all_trips)
+```
+
+Quickly remove the "lat" and "lng" columns as they are not relevant to the analysis...
+
+```{r remove_cols, message=FALSE}
+all_trips <- all_trips %>%  
+  select(-c(start_lat, start_lng, end_lat, end_lng))
+```
+
+Add additional columns...
+
+* Add in columns for day/month/year to provide additional opportunities for data aggregation
+* Add in a "ride length" calculated field (displayed in seconds)
+
+```{r formatting, message=FALSE}
+all_trips$date <- as.Date(all_trips$started_at)
+all_trips$month <- format(as.Date(all_trips$date), "%m")
+all_trips$day <- format(as.Date(all_trips$date), "%d")
+all_trips$year <- format(as.Date(all_trips$date), "%Y")
+all_trips$day_of_week <- format(as.Date(all_trips$date), "%A")
+
+all_trips$ride_length <- difftime(all_trips$ended_at,all_trips$started_at)
+```
+
+Inspect the structure of the newly created columns...
+
+```{r str2}
+str(all_trips)
+```
+
+Update column data type...
+
+* We need to convert "ride_length" from "Factor" to "Numeric" so we can run calculations on the data
+
+```{r convert_numeric, message=FALSE}
+all_trips$ride_length <- as.numeric(as.character(all_trips$ride_length))
+is.numeric(all_trips$ride_length)
+```
+
+Remove junk data...
+
+* The dataframe includes a few hundred rows that correspond to when bikes were checked out for QC purposes by Divvy. These rows have a negative ride_length. These rows should be removed.
+
+```{r remove_values, message=FALSE}
+all_trips <- all_trips[!(all_trips$ride_length<0),]
+is.numeric(all_trips$ride_length)
+```
+
+## Conduct descriptive analysis
+
+Gather initial metrics on our ride_length calculated field...
+
+```{r metrics}
+mean(all_trips$ride_length,na.rm=TRUE)
+median(all_trips$ride_length)
+max(all_trips$ride_length)
+min(all_trips$ride_length)
+```
+
+We can also use the summary function to condense a lot of the above metrics into a single line of code.
+
+```{r summary}
+summary(all_trips$ride_length)
+```
+
+Compare trip length metrics by user type...
+
+```{r aggregate}
+aggregate(all_trips$ride_length ~ all_trips$member_casual, FUN = mean)
+aggregate(all_trips$ride_length ~ all_trips$member_casual, FUN = median)
+aggregate(all_trips$ride_length ~ all_trips$member_casual, FUN = max)
+aggregate(all_trips$ride_length ~ all_trips$member_casual, FUN = min)
+```
+
+Lets see the average ride length grouped by member type and day of the week:
+
+```{r aggregate2}
+aggregate(all_trips$ride_length ~ all_trips$member_casual + all_trips$day_of_week, FUN = mean)
+```
+
+The days of the week are out of order. Lets update that column to properly order the values...
+
+```{r ordered, message=FALSE}
+all_trips$day_of_week <- ordered(all_trips$day_of_week, levels=c("Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"))
+```
+
+Notice how the values are now properly ordered:
+
+```{r aggregate3}
+aggregate(all_trips$ride_length ~ all_trips$member_casual + all_trips$day_of_week, FUN = mean)
+```
+
+Analyze ridership data by type and weekday:
+
+```{r byWeekday}
+all_trips %>% 
+  mutate(weekday = wday(started_at, label = TRUE)) %>%
+  group_by(member_casual, weekday) %>%
+  summarize(number_of_rides = n(), average_duration = mean(ride_length)) %>%
+  arrange(member_casual, weekday)
+```
+
+Now lets visualize the number of rides by rider type...
+
+```{r countRiderType}
+all_trips %>% 
+  mutate(weekday = wday(started_at, label = TRUE)) %>% 
+  group_by(member_casual, weekday) %>% 
+  summarise(number_of_rides = n()
+            ,average_duration = mean(ride_length)) %>% 
+  arrange(member_casual, weekday)  %>% 
+  ggplot(aes(x = weekday, y = number_of_rides, fill = member_casual)) +
+  geom_col(position = "dodge")
+```
+
+Visualize by average duration:
+
+```{r avgDuration}
+all_trips %>% 
+  mutate(weekday = wday(started_at, label = TRUE)) %>% 
+  group_by(member_casual, weekday) %>% 
+  summarise(number_of_rides = n()
+            ,average_duration = mean(ride_length)) %>% 
+  arrange(member_casual, weekday)  %>% 
+  ggplot(aes(x = weekday, y = average_duration, fill = member_casual)) +
+  geom_col(position = "dodge")
+```
+Lets create another visualization to check for ride_length outliers:
+
+```{r outliers}
+all_trips %>% 
+  mutate(weekday = wday(started_at, label = TRUE)) %>% 
+  arrange(desc(ride_length)) %>% 
+  slice(1:1000) %>% 
+  ggplot(aes(x = weekday, y = ride_length, colour = member_casual)) +
+  geom_point()
+```
+
+## Takeaways
+
+From the visualizations and analysis, we can see that members make up a larger share of the total number of riders during weekdays - while casual riders make up the larger share during the weekends. However, when factoring in the average length of rides for all users over the course of a week, casual riders average longer ride times compared to members - even during the middle of the week when members make up the largest porportion of the total number of current users. Casual riders tend to use the product for longer periods of time compared to the members of the product. We can also see that average ride times for members stay fairly steady from day to day, while casual riders ride lengths spike up on weekends. It should also be noted that out of the top 1000 ride length values, all 1000 of them are from casual riders, with a handful of them that could be considered outliers compared to the rest of the values in the dataset - which could be skewing the average ride length values for casual users.
